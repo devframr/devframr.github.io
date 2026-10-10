@@ -176,8 +176,7 @@
         </div>
         <ul class="facts">
           <li data-i18n="f1">Windows</li>
-          <li data-i18n="f2">Runs on 8 GB VRAM</li>
-          <li data-i18n="f3">AI engine built in</li>
+          <li data-i18n="f3">AI-assisted editing</li>
         </ul>
       </div>
     </section>
@@ -188,11 +187,11 @@
         <h2 data-i18n="h_editor">Tap the dots to see what everything does.</h2>
         <div class="stage">
           <img src="assets/editor.png" alt="Dreamweave editor" width="1400" height="900">
-          <button class="pin" data-tip="tools"   style="left:7.4%; top:25.6%"></button>
-          <button class="pin" data-tip="options" style="left:57.5%; top:6.9%"></button>
-          <button class="pin" data-tip="layers"  style="left:89.3%; top:42%"></button>
-          <button class="pin" data-tip="history" style="left:89.3%; top:63%"></button>
-          <button class="pin" data-tip="ai"      style="left:94.3%; top:69.2%"></button>
+          <button class="pin" data-tip="tools"   style="left:6.8%; top:25.6%"></button>
+          <button class="pin" data-tip="options" style="left:58%; top:6.9%"></button>
+          <button class="pin" data-tip="layers"  style="left:96.3%; top:31.8%"></button>
+          <button class="pin" data-tip="history" style="left:96.3%; top:57.3%"></button>
+          <button class="pin" data-tip="ai"      style="left:96.3%; top:69.2%"></button>
         </div>
         <div class="tips" id="tips"></div>
         <p class="tip-text" id="tipText" aria-live="polite"></p>
@@ -278,8 +277,8 @@ Preserve the character's face, eyes, hair, anatomy, pose and accessories. Preser
       rail_dl: "Download", soon: "Coming soon", see_editor: "See the editor",
       l_intro: "Intro", l_editor: "Editor", l_ai: "AI edit", l_tpl: "Templates", l_dl: "Download",
       h1: "Grab the brush, open your layers, tell the AI the rest.",
-      lead: "Dreamweave is a Windows image editor with layers, brushes and an AI editing engine built right in.",
-      f1: "Windows", f2: "Runs on 8 GB VRAM", f3: "AI engine built in",
+      lead: "Dreamweave is a Windows image editor with layers, brushes and AI-assisted editing.",
+      f1: "Windows", f3: "AI-assisted editing",
       h_editor: "Tap the dots to see what everything does.",
       h_ai: "Describe the edit. Watch the scene change.",
       before: "Before", after: "After", prompt_used: "Prompt used", copy: "Copy", copied: "Copied",
@@ -302,8 +301,8 @@ Preserve the character's face, eyes, hair, anatomy, pose and accessories. Preser
       rail_dl: "İndir", soon: "Yakında", see_editor: "Editöre göz at",
       l_intro: "Giriş", l_editor: "Editör", l_ai: "Yapay zekâ", l_tpl: "Şablonlar", l_dl: "İndir",
       h1: "Fırçanı al, katmanlarını aç, gerisini yapay zekâya anlat.",
-      lead: "Dreamweave; katmanlar, fırçalar ve içine gömülü bir yapay zekâ düzenleme motoru olan bir Windows görüntü editörü.",
-      f1: "Windows", f2: "8 GB VRAM ile çalışır", f3: "Yapay zekâ motoru içinde",
+      lead: "Dreamweave; katmanlar, fırçalar ve yapay zekâ destekli düzenleme sunan bir Windows görüntü editörü.",
+      f1: "Windows", f3: "Yapay zekâ desteği",
       h_editor: "Noktalara tıkla, her yerin ne işe yaradığını gör.",
       h_ai: "Düzenlemeyi anlat, sahnenin değiştiğini izle.",
       before: "Önce", after: "Sonra", prompt_used: "Kullanılan komut", copy: "Kopyala", copied: "Kopyalandı",
@@ -431,9 +430,10 @@ Preserve the character's face, eyes, hair, anatomy, pose and accessories. Preser
     img.onerror = () => cv.remove();
     img.onload = () => {
       ctx.fillStyle = '#111316'; ctx.fillRect(0, 0, cv.width, cv.height);
-      const s = Math.min(cv.width / img.width, cv.height / img.height, 1.4 * dpr);
-      const w = img.width * s, h = img.height * s;
-      ctx.drawImage(img, (cv.width - w) / 2, (cv.height - h) / 2, w, h);
+      const s = Math.min(cv.width / img.width, cv.height / img.height, 1); /* never upscale: 1 image px = 1 screen px */
+      const w = Math.round(img.width * s), h = Math.round(img.height * s);
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(img, Math.round((cv.width - w) / 2), Math.round((cv.height - h) / 2), w, h);
       let started = false;
       const start = () => {
         if (started) return; started = true;
