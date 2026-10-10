@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dreamweave | Layered image editor with a built-in AI engine</title>
+  <meta name="description" content="Dreamweave is a Windows image editor with layers, brushes and a built-in AI editing engine.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Figtree:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    /* Put MPDSignatureClean-Regular.ttf inside the assets folder */
+    @font-face {
+      font-family: "MPD Signature";
+      src: url("assets/MPDSignatureClean-Regular.ttf") format("truetype");
+      font-display: swap;
+    }
+    :root {
+      --bg: #121212; --panel: #1a1a1a; --raise: #232323; --line: #2e2e2e;
+      --text: #ededed; --muted: #9a9a9a; --orange: #ff5722; --rail: 236px;
+      --display: "Bricolage Grotesque", system-ui, sans-serif;
+      --body: "Figtree", system-ui, sans-serif;
+      --sign: "MPD Signature", "Segoe Script", "Brush Script MT", cursive;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body { background: var(--bg); color: var(--text); font: 400 1.0625rem/1.65 var(--body); -webkit-font-smoothing: antialiased; }
+    img { display: block; max-width: 100%; height: auto; }
+    button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+    :focus-visible { outline: 2px solid var(--orange); outline-offset: 2px; }
+    @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } * { transition: none !important; animation: none !important; } }
+
+    /* ===== Splash (pixel dissolve) ===== */
+    #splash { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 100; background: #111316; cursor: pointer; }
+
+    /* ===== Layers rail ===== */
+    .rail { position: fixed; inset: 0 auto 0 0; width: var(--rail); background: var(--panel); border-right: 1px solid var(--line); display: flex; flex-direction: column; z-index: 10; }
+    .rail-brand { padding: 1.1rem 1.25rem .9rem; font: 400 2rem/1 var(--sign); text-decoration: none; color: var(--text); }
+    .rail-title { padding: .65rem 1.25rem; font-size: .8rem; color: var(--muted); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+    .layers { list-style: none; }
+    .layer-row { display: grid; grid-template-columns: 22px 34px 1fr auto; gap: .6rem; align-items: center; padding: .55rem .9rem .55rem .7rem; border-left: 3px solid transparent; border-bottom: 1px solid var(--line); cursor: pointer; transition: background .15s; }
+    .layer-row:hover { background: var(--raise); }
+    .layer-row.active { background: #2a1d17; border-left-color: var(--orange); }
+    .eye { width: 22px; height: 22px; display: grid; place-items: center; color: var(--muted); border-radius: 4px; }
+    .eye:hover { color: var(--text); }
+    .eye svg { width: 17px; height: 17px; }
+    .layer-row.off .eye { color: #555; }
+    .eye .slash { display: none; }
+    .layer-row.off .eye .slash { display: block; }
+    .thumb { width: 34px; height: 34px; border-radius: 3px; border: 1px solid var(--line); background-color: #000; background-size: cover; background-position: center; }
+    .layer-name { font-size: .92rem; font-weight: 500; line-height: 1.2; }
+    .layer-op { font-size: .75rem; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: .05rem .35rem; }
+    .rail-foot { margin-top: auto; padding: 1.1rem; display: grid; gap: .8rem; }
+    .lang { display: flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+    .lang button { flex: 1; padding: .35rem 0; font-size: .85rem; font-weight: 600; color: var(--muted); }
+    .lang button.on { background: var(--raise); color: var(--text); }
+    .btn { display: inline-block; text-align: center; text-decoration: none; background: var(--orange); color: #fff; font: 700 .98rem var(--display); padding: .8rem 1.5rem; border-radius: 999px; transition: background .15s; }
+    .btn:hover { background: #ff6d3f; }
+    .btn.ghost { background: transparent; border: 1.5px solid #444; }
+    .btn.ghost:hover { background: var(--raise); }
+    .btn.soon { background: var(--raise); color: var(--muted); cursor: default; border: 1.5px dashed #4a4a4a; }
+    .btn.soon:hover { background: var(--raise); }
+
+    /* ===== Content ===== */
+    main { margin-left: var(--rail); }
+    .layer-sec { position: relative; padding: 5.5rem 4vw; border-bottom: 1px solid var(--line); }
+    .layer-sec.is-off > * { display: none; }
+    .layer-sec.is-off { min-height: 160px; padding: 0; background-color: #1b1b1b;
+      background-image: linear-gradient(45deg, #242424 25%, transparent 25%, transparent 75%, #242424 75%), linear-gradient(45deg, #242424 25%, transparent 25%, transparent 75%, #242424 75%);
+      background-size: 24px 24px; background-position: 0 0, 12px 12px; }
+    .inner { max-width: 1040px; }
+    h1 { font: 800 clamp(2.5rem, 5.6vw, 4.8rem)/.98 var(--display); letter-spacing: -.035em; max-width: 15ch; }
+    h2 { font: 700 clamp(1.9rem, 3.4vw, 2.7rem)/1.05 var(--display); letter-spacing: -.028em; max-width: 20ch; }
+    .lead { color: var(--muted); font-size: 1.2rem; max-width: 44ch; margin-top: 1.4rem; }
+    .actions { display: flex; flex-wrap: wrap; gap: .8rem; margin-top: 2rem; }
+    .actions .btn { padding: .85rem 1.7rem; }
+    .facts { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: 2.2rem; list-style: none; }
+    .facts li { border: 1px solid var(--line); border-radius: 999px; padding: .35rem .95rem; font-size: .92rem; color: var(--muted); }
+
+    /* Annotated editor */
+    .stage { position: relative; margin-top: 2.6rem; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+    .pin { position: absolute; width: 26px; height: 26px; margin: -13px 0 0 -13px; border-radius: 50%; background: var(--orange); border: 3px solid #fff; transition: transform .15s; }
+    .pin:hover { transform: scale(1.2); }
+    .pin.active { background: #fff; border-color: var(--orange); transform: scale(1.2); }
+    @media (prefers-reduced-motion: no-preference) {
+      .pin.active { animation: ping 1.6s ease-out infinite; }
+      @keyframes ping { 0% { box-shadow: 0 0 0 0 rgba(255,87,34,.6); } 100% { box-shadow: 0 0 0 16px rgba(255,87,34,0); } }
+    }
+    .tips { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: 1.1rem; }
+    .tip { padding: .45rem 1rem; border: 1px solid var(--line); border-radius: 999px; font-size: .95rem; transition: background .15s, border-color .15s; }
+    .tip:hover { background: var(--raise); }
+    .tip.active { background: var(--orange); border-color: var(--orange); color: #fff; }
+    .tip-text { margin-top: 1.1rem; min-height: 5.6em; max-width: 62ch; }
+    .tip-text strong { display: block; font: 700 1.3rem var(--display); margin-bottom: .2rem; }
+    .tip-text span { color: var(--muted); }
+
+    /* Before / after */
+    .ai-grid { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 3rem; align-items: start; margin-top: 2.6rem; }
+    .compare { position: relative; aspect-ratio: 1; border-radius: 10px; overflow: hidden; border: 1px solid var(--line); --pos: 50%; user-select: none; }
+    .compare img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
+    .compare .after { clip-path: inset(0 0 0 var(--pos)); }
+    .handle { position: absolute; top: 0; bottom: 0; left: var(--pos); width: 2px; background: #fff; transform: translateX(-1px); pointer-events: none; box-shadow: 0 0 12px rgba(0,0,0,.5); }
+    .knob { position: absolute; top: 50%; left: 50%; width: 42px; height: 42px; margin: -21px 0 0 -21px; border-radius: 50%; background: #fff; color: #111; display: grid; place-items: center; box-shadow: 0 2px 14px rgba(0,0,0,.5); font-size: .85rem; font-weight: 800; letter-spacing: -.1em; }
+    .compare input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: ew-resize; touch-action: pan-y; }
+    .badge { position: absolute; top: .8rem; padding: .2rem .7rem; border-radius: 999px; background: rgba(18,18,18,.72); font-size: .82rem; font-weight: 600; pointer-events: none; }
+    .badge.l { left: .8rem; } .badge.r { right: .8rem; }
+    .meta h3 { font: 700 1.05rem var(--display); color: var(--muted); font-weight: 600; margin-bottom: .6rem; }
+    .prompt { position: relative; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 1.1rem 1.2rem 1.1rem; }
+    .prompt pre { white-space: pre-wrap; font: 400 .92rem/1.6 ui-monospace, Consolas, monospace; color: #d9d9d9; padding-right: 4.5rem; }
+    .copy { position: absolute; top: .7rem; right: .7rem; font-size: .8rem; padding: .25rem .7rem; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); }
+    .copy:hover { background: var(--raise); color: var(--text); }
+    dl.spec { margin-top: 1.8rem; border-top: 1px solid var(--line); }
+    dl.spec div { display: grid; grid-template-columns: 8.5rem 1fr; gap: 1rem; padding: .8rem 0; border-bottom: 1px solid var(--line); }
+    dl.spec dt { color: var(--muted); font-size: .95rem; }
+    dl.spec dd { font-weight: 500; }
+    .note { color: var(--muted); font-size: .95rem; margin-top: 1.1rem; max-width: 52ch; }
+
+    /* Templates */
+    .tpl { display: grid; grid-template-columns: 340px 1fr; gap: 3rem; align-items: center; margin-top: 2.6rem; }
+    .tpl-list { list-style: none; }
+    .tpl-list li { display: flex; justify-content: space-between; gap: 1rem; padding: .95rem 0; border-bottom: 1px solid var(--line); }
+    .tpl-list li:first-child { border-top: 1px solid var(--line); }
+    .tpl-list b { font: 700 1.15rem var(--display); }
+    .tpl-list span { color: var(--muted); font-variant-numeric: tabular-nums; }
+    .tpl-note { color: var(--muted); margin-top: 1.2rem; }
+    .shot { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+
+    /* Download */
+    .dl { display: flex; align-items: center; justify-content: space-between; gap: 2rem; flex-wrap: wrap; }
+    .dl p { color: var(--muted); margin-top: .8rem; max-width: 40ch; }
+    footer { padding: 1.6rem 4vw; color: var(--muted); font-size: .9rem; display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+    footer a { color: inherit; }
+
+    @media (max-width: 900px) {
+      .rail { position: sticky; top: 0; inset: auto; width: 100%; flex-direction: row; align-items: stretch; border-right: 0; border-bottom: 1px solid var(--line); overflow-x: auto; }
+      .rail-title, .layer-op, .thumb, .rail-foot .btn { display: none; }
+      .rail-brand { display: block; padding: .6rem 1rem; font-size: 1.6rem; white-space: nowrap; }
+      .layers { display: flex; }
+      .layer-row { grid-template-columns: 22px auto; border-left: 0; border-bottom: 3px solid transparent; white-space: nowrap; padding: .6rem .8rem; }
+      .layer-row.active { border-bottom-color: var(--orange); }
+      .rail-foot { margin: 0; padding: .5rem .8rem; align-content: center; }
+      .lang button { padding: .3rem .8rem; }
+      main { margin-left: 0; }
+      .layer-sec { padding: 3.5rem 1.25rem; }
+      .tpl, .ai-grid { grid-template-columns: 1fr; gap: 1.8rem; }
+      .pin { width: 22px; height: 22px; margin: -11px 0 0 -11px; border-width: 2px; }
+      dl.spec div { grid-template-columns: 7rem 1fr; }
+    }
+  </style>
+  <noscript><style>#splash { display: none; }</style></noscript>
+</head>
+<body>
+  <canvas id="splash" aria-hidden="true"></canvas>
+
+  <aside class="rail" aria-label="Page sections">
+    <a href="#intro" class="rail-brand">Dreamweave</a>
+    <div class="rail-title">Layers</div>
+    <ul class="layers" id="layers"></ul>
+    <div class="rail-foot">
+      <div class="lang" role="group" aria-label="Language">
+        <button data-lang="tr">TR</button><button data-lang="en">EN</button>
+      </div>
+      <a class="btn" href="#download" data-i18n="rail_dl">Download</a>
+    </div>
+  </aside>
+
+  <main>
+    <!-- INTRO -->
+    <section class="layer-sec" id="intro" data-key="l_intro" data-thumb="linear-gradient(135deg,#ff5722,#3a1a10)">
+      <div class="inner">
+        <h1 data-i18n="h1">Grab the brush, open your layers, tell the AI the rest.</h1>
+        <p class="lead" data-i18n="lead"></p>
+        <div class="actions">
+          <span class="btn soon" data-i18n="soon">Coming soon</span>
+          <a class="btn ghost" href="#editor" data-i18n="see_editor">See the editor</a>
+        </div>
+        <ul class="facts">
+          <li data-i18n="f1">Windows</li>
+          <li data-i18n="f2">Runs on 8 GB VRAM</li>
+          <li data-i18n="f3">AI engine built in</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- EDITOR -->
+    <section class="layer-sec" id="editor" data-key="l_editor" data-thumb="url(assets/editor.png)">
+      <div class="inner">
+        <h2 data-i18n="h_editor">Tap the dots to see what everything does.</h2>
+        <div class="stage">
+          <img src="assets/editor.png" alt="Dreamweave editor" width="1400" height="900">
+          <button class="pin" data-tip="tools"   style="left:7.4%; top:25.6%"></button>
+          <button class="pin" data-tip="options" style="left:57.5%; top:6.9%"></button>
+          <button class="pin" data-tip="layers"  style="left:89.3%; top:42%"></button>
+          <button class="pin" data-tip="history" style="left:89.3%; top:63%"></button>
+          <button class="pin" data-tip="ai"      style="left:94.3%; top:69.2%"></button>
+        </div>
+        <div class="tips" id="tips"></div>
+        <p class="tip-text" id="tipText" aria-live="polite"></p>
+      </div>
+    </section>
+
+    <!-- AI EDIT -->
+    <section class="layer-sec" id="ai" data-key="l_ai" data-thumb="url(assets/after.webp)">
+      <div class="inner">
+        <h2 data-i18n="h_ai">Describe the edit. Watch the scene change.</h2>
+        <div class="ai-grid">
+          <div class="compare" id="compare">
+            <img src="assets/before.webp" alt="Original illustration: a white-haired character in a park" width="1024" height="1024" loading="lazy">
+            <img class="after" src="assets/after.webp" alt="Edited illustration: the same character on a beach at golden hour" width="1024" height="1024" loading="lazy">
+            <span class="badge l" data-i18n="before">Before</span>
+            <span class="badge r" data-i18n="after">After</span>
+            <div class="handle"><span class="knob">&lt;&gt;</span></div>
+            <input type="range" min="0" max="100" value="50" id="range" aria-label="Before and after slider">
+          </div>
+
+          <div class="meta">
+            <h3 data-i18n="prompt_used">Prompt used</h3>
+            <div class="prompt">
+              <button class="copy" id="copy" data-i18n="copy">Copy</button>
+              <pre id="promptText">Edit the Image 1.
+Change background beach and golden hour.
+Smooth and correct lighting, rim lighting, volumetric lighting.
+Preserve the character's face, eyes, hair, anatomy, pose and accessories. Preserve the original illustration style and sharp details.</pre>
+            </div>
+            <dl class="spec">
+              <div><dt data-i18n="s_mode">Mode</dt><dd data-i18n="s_mode_v">Current canvas + prompt</dd></div>
+              <div><dt data-i18n="s_size">Size</dt><dd>1024 × 1024</dd></div>
+              <div><dt data-i18n="s_time">Time</dt><dd data-i18n="s_time_v">About 1.5 minutes</dd></div>
+              <div><dt data-i18n="s_sys">Tested on</dt><dd>NVIDIA RTX 3050 (desktop), 8&nbsp;GB VRAM, 8&nbsp;GB RAM</dd></div>
+            </dl>
+            <p class="note" data-i18n="note_ai"></p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TEMPLATES -->
+    <section class="layer-sec" id="templates" data-key="l_tpl" data-thumb="url(assets/home.png)">
+      <div class="inner">
+        <h2 data-i18n="h_tpl">Start from the right size, not a blank page.</h2>
+        <div class="tpl">
+          <div>
+            <ul class="tpl-list">
+              <li><b>Web App</b><span>1920 × 1080</span></li>
+              <li><b>Instagram Post</b><span>1080 × 1080</span></li>
+              <li><b>A4 Print</b><span>1920 × 1080</span></li>
+              <li><b>Mobile App UI</b><span>1080 × 1920</span></li>
+            </ul>
+            <p class="tpl-note" data-i18n="tpl_note"></p>
+          </div>
+          <div class="shot"><img src="assets/home.png" alt="Dreamweave home screen" width="1400" height="900" loading="lazy"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- DOWNLOAD -->
+    <section class="layer-sec" id="download" data-key="l_dl" data-thumb="linear-gradient(#ff5722,#ff5722)">
+      <div class="inner dl">
+        <div>
+          <h2 data-i18n="h_dl">Dreamweave is on its way.</h2>
+          <p data-i18n="dl_p">The download isn't ready yet. Check back soon.</p>
+        </div>
+        <span class="btn soon" style="padding:1rem 2.2rem" data-i18n="soon">Coming soon</span>
+      </div>
+    </section>
+
+    <footer>
+      <span>© 2026 Dreamweave Studio</span>
+      <a href="https://github.com/devframr">GitHub</a>
+    </footer>
+  </main>
+
+  <script>
+  /* ================= Translations ================= */
+  const I18N = {
+    en: {
+      title: "Dreamweave | Layered image editor with a built-in AI engine",
+      rail_dl: "Download", soon: "Coming soon", see_editor: "See the editor",
+      l_intro: "Intro", l_editor: "Editor", l_ai: "AI edit", l_tpl: "Templates", l_dl: "Download",
+      h1: "Grab the brush, open your layers, tell the AI the rest.",
+      lead: "Dreamweave is a Windows image editor with layers, brushes and an AI editing engine built right in.",
+      f1: "Windows", f2: "Runs on 8 GB VRAM", f3: "AI engine built in",
+      h_editor: "Tap the dots to see what everything does.",
+      h_ai: "Describe the edit. Watch the scene change.",
+      before: "Before", after: "After", prompt_used: "Prompt used", copy: "Copy", copied: "Copied",
+      s_mode: "Mode", s_mode_v: "Current canvas + prompt", s_size: "Size", s_time: "Time",
+      s_time_v: "About 1.5 minutes", s_sys: "Tested on",
+      note_ai: "The AI engine runs inside Dreamweave, with no ComfyUI or external API needed. The first run takes a little longer while the model loads. Faster graphics cards should be quicker.",
+      h_tpl: "Start from the right size, not a blank page.",
+      tpl_note: "Pick a template or open an existing project right from the home screen.",
+      h_dl: "Dreamweave is on its way.", dl_p: "The download isn't ready yet. Check back soon.",
+      tips: {
+        tools: ["Tools", "Move, select, lasso, magic wand, crop, shapes, text, brush, eraser, stamp, paint bucket, eyedropper, hand and zoom all sit in the left toolbar."],
+        options: ["Tool options", "Every tool shows its own settings in the top bar: tolerance, opacity and source for the paint bucket, size, hardness and stabilizer for the brush."],
+        layers: ["Layers", "Work on separate layers and leave the original untouched. Hide or lock a layer, change its opacity, add, duplicate or delete layers."],
+        history: ["History", "Every step you take is listed, so you can go back. The navigator lets you zoom and move around the canvas."],
+        ai: ["AI", "Write the edit you want in the prompt box. Use the current canvas as the main image, and add reference images if you like."]
+      }
+    },
+    tr: {
+      title: "Dreamweave | Yapay zekâ motorlu katmanlı görüntü editörü",
+      rail_dl: "İndir", soon: "Yakında", see_editor: "Editöre göz at",
+      l_intro: "Giriş", l_editor: "Editör", l_ai: "Yapay zekâ", l_tpl: "Şablonlar", l_dl: "İndir",
+      h1: "Fırçanı al, katmanlarını aç, gerisini yapay zekâya anlat.",
+      lead: "Dreamweave; katmanlar, fırçalar ve içine gömülü bir yapay zekâ düzenleme motoru olan bir Windows görüntü editörü.",
+      f1: "Windows", f2: "8 GB VRAM ile çalışır", f3: "Yapay zekâ motoru içinde",
+      h_editor: "Noktalara tıkla, her yerin ne işe yaradığını gör.",
+      h_ai: "Düzenlemeyi anlat, sahnenin değiştiğini izle.",
+      before: "Önce", after: "Sonra", prompt_used: "Kullanılan komut", copy: "Kopyala", copied: "Kopyalandı",
+      s_mode: "Mod", s_mode_v: "Mevcut tuval + komut", s_size: "Boyut", s_time: "Süre",
+      s_time_v: "Yaklaşık 1,5 dakika", s_sys: "Test sistemi",
+      note_ai: "Yapay zekâ motoru Dreamweave'in içinde çalışır, ComfyUI ya da harici bir API gerekmez. İlk çalıştırma model yüklendiği için biraz daha uzun sürer. Daha hızlı ekran kartlarında daha kısa sürmesi beklenir.",
+      h_tpl: "Boş sayfa yerine doğru boyutla başla.",
+      tpl_note: "Şablon seç ya da var olan bir projeyi doğrudan ana ekrandan aç.",
+      h_dl: "Dreamweave yolda.", dl_p: "İndirme henüz hazır değil, yakında burada olacak.",
+      tips: {
+        tools: ["Araçlar", "Taşıma, seçim, kement, sihirli değnek, kırpma, şekil, metin, fırça, silgi, damga, boya kovası, damlalık, el ve yakınlaştırma sol çubukta."],
+        options: ["Araç ayarları", "Her araç kendi ayarlarını üst şeritte gösterir: boya kovası için tolerans, opaklık ve kaynak; fırça için boyut, sertlik ve stabilizer."],
+        layers: ["Katmanlar", "Ayrı katmanlarda çalış, orijinale dokunma. Katmanı gizle, kilitle, opaklığını değiştir; katman ekle, kopyala ya da sil."],
+        history: ["Geçmiş", "Yaptığın her adım listelenir, istediğin zaman geri dönebilirsin. Gezgin paneli tuvalde yakınlaşmanı ve dolaşmanı sağlar."],
+        ai: ["Yapay zekâ", "İstediğin düzenlemeyi komut kutusuna yaz. Ana görsel olarak mevcut tuvali kullan, istersen referans görsel ekle."]
+      }
+    }
+  };
+
+  let lang = 'en';
+  try { lang = localStorage.getItem('dw-lang') || ((navigator.language || 'en').toLowerCase().startsWith('tr') ? 'tr' : 'en'); } catch (e) {
+    lang = (navigator.language || 'en').toLowerCase().startsWith('tr') ? 'tr' : 'en';
+  }
+
+  /* ================= Layers rail ================= */
+  const eyeSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/><path class="slash" d="M3 21 21 3"/></svg>';
+  const list = document.getElementById('layers');
+  const secs = [...document.querySelectorAll('.layer-sec')];
+  const names = [];
+  const rows = secs.map(sec => {
+    const li = document.createElement('li');
+    li.className = 'layer-row';
+    li.innerHTML = `<button class="eye" aria-pressed="true">${eyeSvg}</button>
+      <span class="thumb" style="background-image:${sec.dataset.thumb}"></span>
+      <span class="layer-name"></span><span class="layer-op">100%</span>`;
+    names.push([li.querySelector('.layer-name'), li.querySelector('.eye'), sec.dataset.key]);
+    li.addEventListener('click', e => { if (!e.target.closest('.eye')) sec.scrollIntoView({ behavior: 'smooth' }); });
+    li.querySelector('.eye').addEventListener('click', e => {
+      const off = sec.classList.toggle('is-off');
+      li.classList.toggle('off', off);
+      e.currentTarget.setAttribute('aria-pressed', String(!off));
+    });
+    list.appendChild(li);
+    return li;
+  });
+  const layerIO = new IntersectionObserver(entries => {
+    entries.forEach(en => { if (en.isIntersecting) rows.forEach((r, i) => r.classList.toggle('active', secs[i] === en.target)); });
+  }, { rootMargin: '-40% 0px -55% 0px' });
+  secs.forEach(s => layerIO.observe(s));
+
+  /* ================= Annotated screenshot ================= */
+  const pins = [...document.querySelectorAll('.pin')];
+  const tipBox = document.getElementById('tips');
+  const tipText = document.getElementById('tipText');
+  const tipKeys = ['tools', 'options', 'layers', 'history', 'ai'];
+  const chips = tipKeys.map(k => {
+    const b = document.createElement('button');
+    b.className = 'tip'; b.dataset.tip = k; tipBox.appendChild(b); return b;
+  });
+  let activeTip = 'ai';
+  function showTip(k) {
+    activeTip = k;
+    const t = I18N[lang].tips;
+    [...pins, ...chips].forEach(el => el.classList.toggle('active', el.dataset.tip === k));
+    tipText.innerHTML = `<strong>${t[k][0]}</strong><span>${t[k][1]}</span>`;
+  }
+  [...pins, ...chips].forEach(el => el.addEventListener('click', () => showTip(el.dataset.tip)));
+
+  /* ================= Before / after slider ================= */
+  const cmp = document.getElementById('compare');
+  const range = document.getElementById('range');
+  const setPos = v => cmp.style.setProperty('--pos', v + '%');
+  range.addEventListener('input', () => { userMoved = true; setPos(range.value); });
+  let userMoved = false;
+  new IntersectionObserver((en, obs) => {
+    if (!en[0].isIntersecting) return;
+    obs.disconnect();
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const t0 = performance.now(), dur = 2600;
+    (function step(now) {
+      if (userMoved) return;
+      const p = Math.min((now - t0) / dur, 1);
+      const v = 50 + 38 * Math.sin(p * Math.PI * 2) * (1 - p);
+      setPos(v); range.value = v;
+      if (p < 1) requestAnimationFrame(step);
+    })(t0);
+  }, { threshold: 0.6 }).observe(cmp);
+
+  document.getElementById('copy').addEventListener('click', async e => {
+    try { await navigator.clipboard.writeText(document.getElementById('promptText').textContent); } catch (err) { return; }
+    const b = e.currentTarget; b.textContent = I18N[lang].copied;
+    setTimeout(() => { b.textContent = I18N[lang].copy; }, 1500);
+  });
+
+  /* ================= Language ================= */
+  function applyLang(l) {
+    lang = l;
+    try { localStorage.setItem('dw-lang', l); } catch (e) {}
+    const d = I18N[l];
+    document.documentElement.lang = l;
+    document.title = d.title;
+    document.querySelectorAll('[data-i18n]').forEach(el => { if (d[el.dataset.i18n] !== undefined) el.textContent = d[el.dataset.i18n]; });
+    names.forEach(([n, eye, key]) => { n.textContent = d[key]; eye.setAttribute('aria-label', d[key]); });
+    chips.forEach(c => { c.textContent = d.tips[c.dataset.tip][0]; });
+    pins.forEach(p => p.setAttribute('aria-label', d.tips[p.dataset.tip][0]));
+    document.querySelectorAll('.lang button').forEach(b => b.classList.toggle('on', b.dataset.lang === l));
+    showTip(activeTip);
+  }
+  document.querySelectorAll('.lang button').forEach(b => b.addEventListener('click', () => applyLang(b.dataset.lang)));
+  applyLang(lang);
+
+  /* ================= Splash: pixel dissolve ================= */
+  (function () {
+    const cv = document.getElementById('splash');
+    let seen = false;
+    try { seen = sessionStorage.getItem('dw-splash') === '1'; } catch (e) {}
+    if (seen || matchMedia('(prefers-reduced-motion: reduce)').matches) { cv.remove(); return; }
+    try { sessionStorage.setItem('dw-splash', '1'); } catch (e) {}
+
+    const ctx = cv.getContext('2d');
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const W = innerWidth, H = innerHeight;
+    cv.width = W * dpr; cv.height = H * dpr;
+    const img = new Image();
+    img.onerror = () => cv.remove();
+    img.onload = () => {
+      ctx.fillStyle = '#111316'; ctx.fillRect(0, 0, cv.width, cv.height);
+      const s = Math.min(cv.width / img.width, cv.height / img.height, 1.4 * dpr);
+      const w = img.width * s, h = img.height * s;
+      ctx.drawImage(img, (cv.width - w) / 2, (cv.height - h) / 2, w, h);
+      let started = false;
+      const start = () => {
+        if (started) return; started = true;
+        const cell = 36 * dpr, cols = Math.ceil(cv.width / cell), rows = Math.ceil(cv.height / cell);
+        const order = Array.from({ length: cols * rows }, (_, i) => i);
+        for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
+        const dur = 1000, t0 = performance.now(); let done = 0;
+        (function frame(now) {
+          const target = Math.min(order.length, Math.ceil(order.length * Math.min((now - t0) / dur, 1)));
+          for (; done < target; done++) { const i = order[done]; ctx.clearRect((i % cols) * cell, Math.floor(i / cols) * cell, cell, cell); }
+          if (done < order.length) requestAnimationFrame(frame); else cv.remove();
+        })(t0);
+      };
+      cv.addEventListener('pointerdown', start);
+      setTimeout(start, 1700);
+    };
+    img.src = 'assets/splash.webp';
+  })();
+  </script>
+</body>
+</html>
