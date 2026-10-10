@@ -2,10 +2,266 @@
 <html lang="tr">
 <head>
   <meta charset="UTF-8">
-  <title>Devframr</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dreamweave | Katmanlı görüntü editörü</title>
+  <meta name="description" content="Dreamweave; fırça, katman ve yapay zekâ ile düzenleme araçlarını tek pencerede toplayan bir görüntü editörü.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Figtree:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #121212;
+      --panel: #1a1a1a;
+      --raise: #232323;
+      --line: #2e2e2e;
+      --text: #ededed;
+      --muted: #9a9a9a;
+      --orange: #ff5722;
+      --rail: 236px;
+      --display: "Bricolage Grotesque", system-ui, sans-serif;
+      --body: "Figtree", system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body { background: var(--bg); color: var(--text); font: 400 1.0625rem/1.65 var(--body); -webkit-font-smoothing: antialiased; }
+    img { display: block; max-width: 100%; height: auto; }
+    button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+    :focus-visible { outline: 2px solid var(--orange); outline-offset: 2px; }
+    @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } * { transition: none !important; animation: none !important; } }
+
+    /* ===== Layers rail ===== */
+    .rail {
+      position: fixed; inset: 0 auto 0 0; width: var(--rail); background: var(--panel);
+      border-right: 1px solid var(--line); display: flex; flex-direction: column; z-index: 10;
+    }
+    .rail-brand { padding: 1.4rem 1.25rem 1.1rem; font: 800 1.35rem/1 var(--display); letter-spacing: -.02em; text-decoration: none; color: var(--text); }
+    .rail-title { padding: .65rem 1.25rem; font-size: .8rem; color: var(--muted); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+    .layers { list-style: none; }
+    .layer-row {
+      display: grid; grid-template-columns: 22px 34px 1fr auto; gap: .6rem; align-items: center;
+      padding: .55rem .9rem .55rem .7rem; border-left: 3px solid transparent; border-bottom: 1px solid var(--line);
+      cursor: pointer; transition: background .15s;
+    }
+    .layer-row:hover { background: var(--raise); }
+    .layer-row.active { background: #2a1d17; border-left-color: var(--orange); }
+    .eye { width: 22px; height: 22px; display: grid; place-items: center; color: var(--muted); border-radius: 4px; }
+    .eye:hover { color: var(--text); }
+    .eye svg { width: 17px; height: 17px; }
+    .layer-row.off .eye { color: #555; }
+    .layer-row.off .eye .slash { display: block; }
+    .eye .slash { display: none; }
+    .thumb { width: 34px; height: 34px; border-radius: 3px; border: 1px solid var(--line); background-color: #000; background-size: cover; background-position: center; }
+    .layer-name { font-size: .92rem; font-weight: 500; line-height: 1.2; }
+    .layer-op { font-size: .75rem; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: .05rem .35rem; }
+    .rail-foot { margin-top: auto; padding: 1.1rem; }
+    .btn {
+      display: block; text-align: center; text-decoration: none; background: var(--orange); color: #fff;
+      font: 700 .98rem var(--display); padding: .8rem 1rem; border-radius: 999px; transition: background .15s;
+    }
+    .btn:hover { background: #ff6d3f; }
+    .btn.ghost { background: transparent; border: 1.5px solid #444; }
+    .btn.ghost:hover { background: var(--raise); }
+
+    /* ===== Content ===== */
+    main { margin-left: var(--rail); }
+    .layer-sec { position: relative; padding: 5.5rem 4vw; border-bottom: 1px solid var(--line); scroll-margin-top: 0; }
+    .layer-sec.is-off > * { display: none; }
+    .layer-sec.is-off {
+      min-height: 160px; padding: 0;
+      background-color: #1b1b1b;
+      background-image: linear-gradient(45deg, #242424 25%, transparent 25%, transparent 75%, #242424 75%),
+                        linear-gradient(45deg, #242424 25%, transparent 25%, transparent 75%, #242424 75%);
+      background-size: 24px 24px; background-position: 0 0, 12px 12px;
+    }
+    .inner { max-width: 1000px; }
+
+    h1 { font: 800 clamp(2.5rem, 5.6vw, 4.8rem)/.98 var(--display); letter-spacing: -.035em; max-width: 15ch; }
+    h2 { font: 700 clamp(1.9rem, 3.4vw, 2.7rem)/1.05 var(--display); letter-spacing: -.028em; max-width: 18ch; }
+    .lead { color: var(--muted); font-size: 1.2rem; max-width: 42ch; margin-top: 1.4rem; }
+    .actions { display: flex; flex-wrap: wrap; gap: .8rem; margin-top: 2rem; }
+    .actions .btn { padding: .85rem 1.7rem; }
+
+    /* ===== Annotated editor ===== */
+    .stage { position: relative; margin-top: 2.6rem; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+    .pin {
+      position: absolute; width: 26px; height: 26px; margin: -13px 0 0 -13px; border-radius: 50%;
+      background: var(--orange); border: 3px solid #fff; box-shadow: 0 0 0 0 rgba(255,87,34,.6);
+      transition: transform .15s;
+    }
+    .pin:hover { transform: scale(1.2); }
+    .pin.active { background: #fff; border-color: var(--orange); transform: scale(1.2); }
+    @media (prefers-reduced-motion: no-preference) {
+      .pin.active { animation: ping 1.6s ease-out infinite; }
+      @keyframes ping { to { box-shadow: 0 0 0 16px rgba(255,87,34,0); } }
+    }
+    .tips { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: 1.1rem; }
+    .tip { padding: .45rem 1rem; border: 1px solid var(--line); border-radius: 999px; font-size: .95rem; transition: background .15s, border-color .15s; }
+    .tip:hover { background: var(--raise); }
+    .tip.active { background: var(--orange); border-color: var(--orange); color: #fff; }
+    .tip-text { margin-top: 1.1rem; min-height: 5.2em; max-width: 60ch; }
+    .tip-text strong { display: block; font: 700 1.3rem var(--display); margin-bottom: .2rem; }
+    .tip-text span { color: var(--muted); }
+
+    /* ===== Templates ===== */
+    .tpl { display: grid; grid-template-columns: 340px 1fr; gap: 3rem; align-items: center; margin-top: 2.6rem; }
+    .tpl-list { list-style: none; }
+    .tpl-list li { display: flex; justify-content: space-between; gap: 1rem; padding: .95rem 0; border-bottom: 1px solid var(--line); }
+    .tpl-list li:first-child { border-top: 1px solid var(--line); }
+    .tpl-list b { font: 700 1.15rem var(--display); }
+    .tpl-list span { color: var(--muted); font-variant-numeric: tabular-nums; }
+    .tpl-note { color: var(--muted); margin-top: 1.2rem; }
+    .shot { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+
+    /* ===== Download ===== */
+    .dl { display: flex; align-items: center; justify-content: space-between; gap: 2rem; flex-wrap: wrap; }
+    .dl p { color: var(--muted); margin-top: .8rem; max-width: 38ch; }
+    footer { padding: 1.6rem 4vw; color: var(--muted); font-size: .9rem; display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+    footer a { color: inherit; }
+
+    /* ===== Mobile ===== */
+    @media (max-width: 900px) {
+      .rail { position: sticky; top: 0; inset: auto; width: 100%; flex-direction: row; align-items: stretch; border-right: 0; border-bottom: 1px solid var(--line); overflow-x: auto; }
+      .rail-brand, .rail-title, .rail-foot, .layer-op, .thumb { display: none; }
+      .rail-brand { display: block; padding: .9rem 1rem; font-size: 1.1rem; }
+      .layers { display: flex; }
+      .layer-row { grid-template-columns: 22px auto; border-left: 0; border-bottom: 3px solid transparent; white-space: nowrap; padding: .6rem .8rem; }
+      .layer-row.active { border-bottom-color: var(--orange); }
+      main { margin-left: 0; }
+      .layer-sec { padding: 3.5rem 1.25rem; }
+      .tpl { grid-template-columns: 1fr; gap: 1.8rem; }
+      .pin { width: 22px; height: 22px; margin: -11px 0 0 -11px; border-width: 2px; }
+    }
+  </style>
 </head>
 <body>
-  <h1>Merhaba dünya!</h1>
-  <p>İlk sitem yayında.</p>
+
+  <!-- Layers panel (JS fills the rows) -->
+  <aside class="rail" aria-label="Sayfa bölümleri">
+    <a href="#giris" class="rail-brand">Dreamweave</a>
+    <div class="rail-title">Layers</div>
+    <ul class="layers" id="layers"></ul>
+    <div class="rail-foot"><a class="btn" href="#indir">İndir</a></div>
+  </aside>
+
+  <main>
+    <!-- GİRİŞ -->
+    <section class="layer-sec" id="giris" data-name="Giriş" data-thumb="linear-gradient(135deg,#ff5722,#3a1a10)">
+      <div class="inner">
+        <h1>Fırçanı al, katmanlarını aç, gerisini yapay zekâya anlat.</h1>
+        <p class="lead">Dreamweave, görüntü düzenlemek için ihtiyacın olan araçları tek pencerede toplayan bir masaüstü editörü.</p>
+        <div class="actions">
+          <a class="btn" href="#indir">İndir</a>
+          <a class="btn ghost" href="#editor">Editöre göz at</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- EDİTÖR -->
+    <section class="layer-sec" id="editor" data-name="Editör" data-thumb="url(assets/editor.png)">
+      <div class="inner">
+        <h2>Noktalara tıkla, her yerin ne işe yaradığını gör.</h2>
+        <div class="stage">
+          <img src="assets/editor.png" alt="Dreamweave editörü" width="1408" height="915">
+          <button class="pin" data-tip="tools"   style="left:7.5%;  top:36%" aria-label="Araçlar"></button>
+          <button class="pin" data-tip="brush"   style="left:58.5%; top:7.7%" aria-label="Fırça ayarları"></button>
+          <button class="pin" data-tip="layers"  style="left:89.5%; top:38%" aria-label="Katmanlar"></button>
+          <button class="pin" data-tip="history" style="left:89.5%; top:57.5%" aria-label="Geçmiş"></button>
+          <button class="pin" data-tip="ai"      style="left:89.5%; top:69%" aria-label="Yapay zekâ"></button>
+        </div>
+        <div class="tips" id="tips"></div>
+        <p class="tip-text" id="tipText" aria-live="polite"></p>
+      </div>
+    </section>
+
+    <!-- ŞABLONLAR -->
+    <section class="layer-sec" id="sablonlar" data-name="Şablonlar" data-thumb="url(assets/home.png)">
+      <div class="inner">
+        <h2>Boş sayfa yerine doğru boyutla başla.</h2>
+        <div class="tpl">
+          <div>
+            <ul class="tpl-list">
+              <li><b>Web App</b><span>1920 × 1080</span></li>
+              <li><b>Instagram Post</b><span>1080 × 1080</span></li>
+              <li><b>A4 Print</b><span>1920 × 1080</span></li>
+              <li><b>Mobile App UI</b><span>1080 × 1920</span></li>
+            </ul>
+            <p class="tpl-note">Son projelerin ana ekranda durur, kaldığın yerden devam edersin.</p>
+          </div>
+          <div class="shot"><img src="assets/home.png" alt="Dreamweave ana ekranı" width="1410" height="909" loading="lazy"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- İNDİR -->
+    <section class="layer-sec" id="indir" data-name="İndir" data-thumb="linear-gradient(#ff5722,#ff5722)">
+      <div class="inner dl">
+        <div>
+          <h2>Dreamweave'i dene.</h2>
+          <p>İndir, kur, ana ekrandan yeni projeni oluştur.</p>
+        </div>
+        <!-- TODO: href="#" yerine gerçek indirme linkini yaz -->
+        <a class="btn" href="#" style="padding:1rem 2.2rem">İndir</a>
+      </div>
+    </section>
+
+    <footer>
+      <span>© 2026 Dreamweave</span>
+      <a href="https://github.com/devframr">GitHub</a>
+    </footer>
+  </main>
+
+  <script>
+    /* ---- Layers rail ---- */
+    const eyeSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/><path class="slash" d="M3 21 21 3"/></svg>';
+    const list = document.getElementById('layers');
+    const secs = [...document.querySelectorAll('.layer-sec')];
+    const rows = secs.map(sec => {
+      const li = document.createElement('li');
+      li.className = 'layer-row';
+      li.innerHTML = `<button class="eye" aria-label="${sec.dataset.name} katmanını göster/gizle" aria-pressed="true">${eyeSvg}</button>
+        <span class="thumb" style="background-image:${sec.dataset.thumb}"></span>
+        <span class="layer-name">${sec.dataset.name}</span><span class="layer-op">100%</span>`;
+      li.addEventListener('click', e => {
+        if (e.target.closest('.eye')) return;
+        sec.scrollIntoView({ behavior: 'smooth' });
+      });
+      li.querySelector('.eye').addEventListener('click', e => {
+        const off = sec.classList.toggle('is-off');
+        li.classList.toggle('off', off);
+        e.currentTarget.setAttribute('aria-pressed', String(!off));
+      });
+      list.appendChild(li);
+      return li;
+    });
+    const io = new IntersectionObserver(entries => {
+      entries.forEach(en => {
+        if (en.isIntersecting) rows.forEach((r, i) => r.classList.toggle('active', secs[i] === en.target));
+      });
+    }, { rootMargin: '-40% 0px -55% 0px' });
+    secs.forEach(s => io.observe(s));
+
+    /* ---- Annotated screenshot ---- */
+    const tips = {
+      tools:   ['Araçlar', 'Seçim, kement, sihirli değnek, kırpma, metin, şekil, fırça, silgi, damga, boya kovası, damlalık ve daha fazlası sol çubukta.'],
+      brush:   ['Fırça ayarları', 'Fırçanın ucunu, boyutunu, sertliğini ve opaklığını üstteki şeritten anında değiştirirsin. Stabilizer, titrek çizgileri yumuşatır.'],
+      layers:  ['Katmanlar', 'Her değişikliği ayrı katmanda yap, orijinale dokunma. Katmanı gizle, kilitle, saydamlığını ayarla; ekle, grupla, kopyala, sil.'],
+      history: ['Geçmiş', 'Yaptığın adımlar burada listelenir. Gezgin paneli de büyütüp küçültmeni ve tuvalde dolaşmanı sağlar.'],
+      ai:      ['Yapay zekâ', 'Yapmak istediğin düzenlemeyi komut kutusuna yaz. Ana görsel olarak tüm tuvali ya da bir katmanı seç, istersen referans görsel ekle.']
+    };
+    const pins = [...document.querySelectorAll('.pin')];
+    const tipBox = document.getElementById('tips');
+    const tipText = document.getElementById('tipText');
+    const chips = Object.keys(tips).map(k => {
+      const b = document.createElement('button');
+      b.className = 'tip'; b.textContent = tips[k][0]; b.dataset.tip = k;
+      tipBox.appendChild(b); return b;
+    });
+    function show(k) {
+      [...pins, ...chips].forEach(el => el.classList.toggle('active', el.dataset.tip === k));
+      tipText.innerHTML = `<strong>${tips[k][0]}</strong><span>${tips[k][1]}</span>`;
+    }
+    [...pins, ...chips].forEach(el => el.addEventListener('click', () => show(el.dataset.tip)));
+    show('ai');
+  </script>
 </body>
 </html>
